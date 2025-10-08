@@ -80,10 +80,11 @@ export async function getThread(
     limit: 50,
   });
 
-  // Ensure we have messages
-
-  if (!messages) throw new Error("No messages found in thread");
-
+  // If no messages found, return empty array (e.g., beginning of thread or API issue)
+  if (!messages || messages.length === 0) {
+    return [];
+  }
+  console.log("messages", messages);
   const result = messages
     .map((message) => {
       const isBot = !!message.bot_id;
