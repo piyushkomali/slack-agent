@@ -41,12 +41,58 @@ export async function handleNewAppMention(
   if (thread_ts) {
     const messages = await getThread(channel, thread_ts, botUserId);
     const result = await generateResponse(messages, updateMessage);
-    updateMessage(result);
+    
+    // Accumulate text and update message with rate limiting
+    let accumulatedText = "";
+    let lastUpdateTime = 0;
+    const updateIntervalMs = 500; // Update every 500ms max
+
+    for await (const delta of result.textStream) {
+      accumulatedText += delta;
+      const now = Date.now();
+      
+      if (now - lastUpdateTime >= updateIntervalMs) {
+        const formattedText = accumulatedText
+          .replace(/\[(.*?)\]\((.*?)\)/g, "<$2|$1>")
+          .replace(/\*\*/g, "*");
+        await updateMessage(formattedText);
+        lastUpdateTime = now;
+      }
+    }
+
+    // Final update to ensure we have the complete text
+    const finalFormattedText = accumulatedText
+      .replace(/\[(.*?)\]\((.*?)\)/g, "<$2|$1>")
+      .replace(/\*\*/g, "*");
+    await updateMessage(finalFormattedText);
   } else {
     const result = await generateResponse(
       [{ role: "user", content: event.text }],
       updateMessage,
     );
-    updateMessage(result);
+    
+    // Accumulate text and update message with rate limiting
+    let accumulatedText = "";
+    let lastUpdateTime = 0;
+    const updateIntervalMs = 500; // Update every 500ms max
+
+    for await (const delta of result.textStream) {
+      accumulatedText += delta;
+      const now = Date.now();
+      
+      if (now - lastUpdateTime >= updateIntervalMs) {
+        const formattedText = accumulatedText
+          .replace(/\[(.*?)\]\((.*?)\)/g, "<$2|$1>")
+          .replace(/\*\*/g, "*");
+        await updateMessage(formattedText);
+        lastUpdateTime = now;
+      }
+    }
+
+    // Final update to ensure we have the complete text
+    const finalFormattedText = accumulatedText
+      .replace(/\[(.*?)\]\((.*?)\)/g, "<$2|$1>")
+      .replace(/\*\*/g, "*");
+    await updateMessage(finalFormattedText);
   }
 }

@@ -52,18 +52,67 @@ export async function handleNewAssistantMessage(
 
   const messages = await getThread(channel, thread_ts, botUserId);
   const result = await generateResponse(messages, updateStatus);
-
-  await client.chat.postMessage({
+  
+  // Post initial message
+  const initialMessage = await client.chat.postMessage({
     channel: channel,
     thread_ts: thread_ts,
-    text: result,
+    text: "...",
     unfurl_links: false,
+  });
+
+  if (!initialMessage || !initialMessage.ts) {
+    throw new Error("Failed to post initial message");
+  }
+
+  // Accumulate text and update message with rate limiting
+  let accumulatedText = "";
+  let lastUpdateTime = 0;
+  const updateIntervalMs = 220; // Update every 500ms max
+
+  for await (const delta of result.textStream) {
+    accumulatedText += delta;
+    const now = Date.now();
+    
+    // Update message if enough time has passed or if it's the last chunk
+    if (now - lastUpdateTime >= updateIntervalMs) {
+      const formattedText = accumulatedText
+        .replace(/\[(.*?)\]\((.*?)\)/g, "<$2|$1>")
+        .replace(/\*\*/g, "*");
+      
+      await client.chat.update({
+        channel: channel,
+        ts: initialMessage.ts,
+        text: formattedText,
+        blocks: [
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: formattedText,
+            },
+          },
+        ],
+      });
+      lastUpdateTime = now;
+    }
+  }
+
+  // Final update to ensure we have the complete text
+  const finalFormattedText = accumulatedText
+    .replace(/\[(.*?)\]\((.*?)\)/g, "<$2|$1>")
+    .replace(/\*\*/g, "*");
+  
+  await client.chat.update({
+    channel: channel,
+    ts: initialMessage.ts,
+    text: finalFormattedText,
     blocks: [
       {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: result,
+          text: finalFormattedText,
         },
       },
     ],

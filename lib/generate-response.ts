@@ -1,13 +1,13 @@
 import { openai } from '@ai-sdk/openai';
-import { generateText, tool, CoreMessage } from 'ai';
+import { streamText, tool, ModelMessage, stepCountIs } from 'ai';
 import { z } from 'zod';
 import { exa } from './utils';
 
 export const generateResponse = async (
-  messages: CoreMessage[],
+    messages: ModelMessage[],
   updateStatus?: (status: string) => void,
 ) => {
-  const { text } = await generateText({
+  const result = await streamText({
     model: openai('gpt-5-nano'),
     temperature: 1,
     system: `You are a Slack bot assistant. Keep your responses concise and to the point.
@@ -15,16 +15,15 @@ export const generateResponse = async (
     - Current date is: ${new Date().toISOString().split('T')[0]}
     - Always include sources in your final response if you use web search.`,
     messages,
-    maxSteps: 10,
     tools: {
       getWeather: tool({
         description: 'Get the current weather at a location',
-        parameters: z.object({
+        inputSchema: z.object({
           latitude: z.number(),
           longitude: z.number(),
           city: z.string(),
         }),
-        execute: async ({ latitude, longitude, city }) => {
+        execute: async ({ latitude, longitude, city }: { latitude: number; longitude: number; city: string }) => {
           updateStatus?.(`is getting weather for ${city}...`);
 
           const response = await fetch(
@@ -39,38 +38,31 @@ export const generateResponse = async (
             city,
           };
         },
-      })
-      // searchWeb: tool({
-      //   description: 'Use this to search the web for information',
-      //   parameters: z.object({
-      //     query: z.string(),
-      //     specificDomain: z
-      //       .string()
-      //       .nullable()
-      //       .describe(
-      //         'a domain to search if the user specifies e.g. bbc.com. Should be only the domain name without the protocol',
-      //       ),
-      //   }),
-        // execute: async ({ query, specificDomain }) => {
-        //   updateStatus?.(`is searching the web for ${query}...`);
-        //   const { results } = await exa.searchAndContents(query, {
-        //     livecrawl: 'always',
-        //     numResults: 3,
-        //     includeDomains: specificDomain ? [specificDomain] : undefined,
-        //   });
+      }),
+      webSearch: tool({
+        description: 'Search the web for up-to-date information',
+        inputSchema: z.object({
+          query: z.string().min(1).max(100).describe('The search query'),
+        }),
+        execute: async ({ query }: { query: string }) => {
+          updateStatus?.(`is searching the web for: ${query}...`);
 
-        //   return {
-        //     results: results.map(result => ({
-        //       title: result.title,
-        //       url: result.url,
-        //       snippet: result.text.slice(0, 1000),
-        //     })),
-        //   };
-        // },
-      // }),
+          const { results } = await exa.searchAndContents(query, {
+            livecrawl: 'always',
+            numResults: 3,
+          });
+          return results.map(result => ({
+            title: result.title,
+            url: result.url,
+            content: result.text.slice(0, 1000), // take just the first 1000 characters
+            publishedDate: result.publishedDate,
+          }));
+        },
+      }),
     },
+    stopWhen: stepCountIs(10),
   });
-
+  return result;
   // Convert markdown to Slack mrkdwn format
-  return text.replace(/\[(.*?)\]\((.*?)\)/g, '<$2|$1>').replace(/\*\*/g, '*');
+  // return result.replace(/\[(.*?)\]\((.*?)\)/g, "<$2|$1>").replace(/\*\*/g, "*");
 };
