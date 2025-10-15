@@ -1,24 +1,23 @@
 import { openai } from '@ai-sdk/openai';
-import { streamText, tool, ModelMessage, stepCountIs } from 'ai';
+import { streamText, tool, CoreMessage } from 'ai';
 import { z } from 'zod';
 import { exa } from './utils';
 
 export const generateResponse = async (
-    messages: ModelMessage[],
+    messages: CoreMessage[],
   updateStatus?: (status: string) => void,
 ) => {
   const result = await streamText({
     model: openai('gpt-5-nano'),
-    temperature: 1,
     system: `You are a Slack bot assistant. Keep your responses concise and to the point.
     - Do not tag users.
     - Current date is: ${new Date().toISOString().split('T')[0]}
     - Always include sources in your final response if you use web search.`,
-    messages,
+    messages: messages as CoreMessage[],
     tools: {
       getWeather: tool({
         description: 'Get the current weather at a location',
-        inputSchema: z.object({
+        parameters: z.object({
           latitude: z.number(),
           longitude: z.number(),
           city: z.string(),
@@ -41,7 +40,7 @@ export const generateResponse = async (
       }),
       webSearch: tool({
         description: 'Search the web for up-to-date information',
-        inputSchema: z.object({
+        parameters: z.object({
           query: z.string().min(1).max(100).describe('The search query'),
         }),
         execute: async ({ query }: { query: string }) => {
@@ -60,7 +59,7 @@ export const generateResponse = async (
         },
       }),
     },
-    stopWhen: stepCountIs(10),
+    maxSteps: 10,
   });
   return result;
   // Convert markdown to Slack mrkdwn format
