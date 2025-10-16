@@ -1,6 +1,6 @@
 import { openai } from '@ai-sdk/openai';
 import { streamText, tool, ModelMessage, stepCountIs } from 'ai';
-import { z } from 'zod/v3';
+import { z } from 'zod';
 import { exa } from './utils';
 
 export const generateResponse = async (
