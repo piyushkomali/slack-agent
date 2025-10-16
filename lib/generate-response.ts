@@ -30,6 +30,7 @@ export const generateResponse = async (
           );
 
           const weatherData = await response.json();
+          console.log("weatherData", weatherData);
           return {
             temperature: weatherData.current.temperature_2m,
             weatherCode: weatherData.current.weathercode,
@@ -59,7 +60,7 @@ export const generateResponse = async (
         },
       }),
     },
-    maxSteps: 10,
+    maxSteps: 2,
   });
   return result;
   // Convert markdown to Slack mrkdwn format
