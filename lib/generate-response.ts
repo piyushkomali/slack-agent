@@ -1,23 +1,26 @@
 import { openai } from '@ai-sdk/openai';
-import { streamText, tool, CoreMessage } from 'ai';
-import { z } from 'zod';
+import { streamText, tool, ModelMessage, stepCountIs } from 'ai';
+import { z } from 'zod/v3';
 import { exa } from './utils';
 
 export const generateResponse = async (
-    messages: CoreMessage[],
+    messages: ModelMessage[],
   updateStatus?: (status: string) => void,
 ) => {
   const result = await streamText({
     model: openai('gpt-5-nano'),
+
     system: `You are a Slack bot assistant. Keep your responses concise and to the point.
     - Do not tag users.
     - Current date is: ${new Date().toISOString().split('T')[0]}
     - Always include sources in your final response if you use web search.`,
-    messages: messages as CoreMessage[],
+
+    messages: messages as ModelMessage[],
+
     tools: {
       getWeather: tool({
         description: 'Get the current weather at a location',
-        parameters: z.object({
+        inputSchema: z.object({
           latitude: z.number(),
           longitude: z.number(),
           city: z.string(),
@@ -41,7 +44,7 @@ export const generateResponse = async (
       }),
       webSearch: tool({
         description: 'Search the web for up-to-date information',
-        parameters: z.object({
+        inputSchema: z.object({
           query: z.string().min(1).max(100).describe('The search query'),
         }),
         execute: async ({ query }: { query: string }) => {
@@ -60,7 +63,8 @@ export const generateResponse = async (
         },
       }),
     },
-    maxSteps: 2,
+
+    stopWhen: stepCountIs(2)
   });
   return result;
   // Convert markdown to Slack mrkdwn format
